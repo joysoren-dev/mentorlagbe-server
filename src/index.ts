@@ -8,6 +8,8 @@ import userRoutes from "./routes/user.route";
 import tuitionRoutes from "./routes/tuition.route";
 import applicationRoutes from "./routes/application.route";
 import dashboardRoutes from "./routes/dashboard.route";
+import paymentRoutes from "./routes/payment.route";
+import { handleStripeWebhook } from "./controllers/payment.controller";
 
 dotenv.config();
 
@@ -20,6 +22,13 @@ app.use(
     credentials: true,
   }),
 );
+
+app.post(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json" }),
+  handleStripeWebhook,
+);
+
 app.use(express.json());
 
 app.get("/", (_req: Request, res: Response) => {
@@ -35,6 +44,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/tuitions", tuitionRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/payments", paymentRoutes);
 
 const startServer = async () => {
   await connectDB();
