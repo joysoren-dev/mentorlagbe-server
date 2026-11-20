@@ -3,12 +3,13 @@ import { ObjectId } from "mongodb";
 import { collections } from "../config/db";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
-export const applyForTuition = async (
+export const createApplication = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
     const studentEmail = req.user?.email?.toLowerCase();
+    const studentName = req.user?.name || "Student";
 
     if (!studentEmail) {
       res.status(401).json({
@@ -43,47 +44,37 @@ export const applyForTuition = async (
       return;
     }
 
-    if (tuition.approvalStatus !== "approved" || !tuition.isActive) {
+    if (tuition.approvalStatus !== "approved" || tuition.isActive === false) {
       res.status(400).json({
         success: false,
-        message: "This tuition is not currently open for applications",
-      });
-      return;
-    }
-
-    if (tuition.tutorEmail?.toLowerCase() === studentEmail) {
-      res.status(400).json({
-        success: false,
-        message: "You cannot apply to your own tuition post",
+        message: "You can only apply to approved and active tuitions",
       });
       return;
     }
 
     const existingApplication = await collections.applications.findOne({
-      tuitionId,
+      tuitionId: tuition._id.toString(),
       studentEmail,
     });
 
     if (existingApplication) {
       res.status(409).json({
         success: false,
-        message: "You have already applied for this tuition",
+        message: "You have already applied to this tuition",
       });
       return;
     }
 
-    const student = await collections.users.findOne({ email: studentEmail });
-
     const newApplication = {
-      tuitionId,
+      tuitionId: tuition._id.toString(),
       tuitionTitle: tuition.title,
       tuitionSubject: tuition.subject,
       monthlyFee: tuition.monthlyFee,
-      studentName: student?.name || req.user?.name || "Student",
+      studentName,
       studentEmail,
-      tutorEmail: tuition.tutorEmail.toLowerCase(),
-      message: message?.trim() || "",
-      status: "pending" as const,
+      tutorEmail: tuition.tutorEmail,
+      message: typeof message === "string" ? message.trim() : "",
+      status: "pending",
       createdAt: new Date().toISOString(),
     };
 
@@ -98,7 +89,7 @@ export const applyForTuition = async (
       },
     });
   } catch (error) {
-    console.error("Apply for tuition error:", error);
+    console.error("Create application error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to submit application",
@@ -106,7 +97,7 @@ export const applyForTuition = async (
   }
 };
 
-export const getStudentMyApplications = async (
+export const getMyApplications = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
@@ -126,18 +117,18 @@ export const getStudentMyApplications = async (
       .sort({ createdAt: -1 })
       .toArray();
 
-    const formatted = applications.map((item) => ({
-      id: item._id.toString(),
-      tuitionId: item.tuitionId,
-      tuitionTitle: item.tuitionTitle,
-      tuitionSubject: item.tuitionSubject || "",
-      monthlyFee: item.monthlyFee || 0,
-      studentName: item.studentName,
-      studentEmail: item.studentEmail,
-      tutorEmail: item.tutorEmail,
-      message: item.message || "",
-      status: item.status,
-      createdAt: item.createdAt,
+    const formatted = applications.map((app) => ({
+      id: app._id.toString(),
+      tuitionId: app.tuitionId,
+      tuitionTitle: app.tuitionTitle,
+      tuitionSubject: app.tuitionSubject,
+      monthlyFee: app.monthlyFee,
+      studentName: app.studentName,
+      studentEmail: app.studentEmail,
+      tutorEmail: app.tutorEmail,
+      message: app.message || "",
+      status: app.status,
+      createdAt: app.createdAt,
     }));
 
     res.status(200).json({
@@ -146,15 +137,15 @@ export const getStudentMyApplications = async (
       applications: formatted,
     });
   } catch (error) {
-    console.error("Get student applications error:", error);
+    console.error("Get my applications error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch your applications",
+      message: "Failed to fetch applications",
     });
   }
 };
 
-export const getTutorReceivedApplications = async (
+export const getTutorApplications = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
@@ -174,18 +165,18 @@ export const getTutorReceivedApplications = async (
       .sort({ createdAt: -1 })
       .toArray();
 
-    const formatted = applications.map((item) => ({
-      id: item._id.toString(),
-      tuitionId: item.tuitionId,
-      tuitionTitle: item.tuitionTitle,
-      tuitionSubject: item.tuitionSubject || "",
-      monthlyFee: item.monthlyFee || 0,
-      studentName: item.studentName,
-      studentEmail: item.studentEmail,
-      tutorEmail: item.tutorEmail,
-      message: item.message || "",
-      status: item.status,
-      createdAt: item.createdAt,
+    const formatted = applications.map((app) => ({
+      id: app._id.toString(),
+      tuitionId: app.tuitionId,
+      tuitionTitle: app.tuitionTitle,
+      tuitionSubject: app.tuitionSubject,
+      monthlyFee: app.monthlyFee,
+      studentName: app.studentName,
+      studentEmail: app.studentEmail,
+      tutorEmail: app.tutorEmail,
+      message: app.message || "",
+      status: app.status,
+      createdAt: app.createdAt,
     }));
 
     res.status(200).json({
@@ -197,19 +188,19 @@ export const getTutorReceivedApplications = async (
     console.error("Get tutor applications error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch received applications",
+      message: "Failed to fetch tutor applications",
     });
   }
 };
 
-export const updateApplicationStatusByTutor = async (
+export const updateApplicationStatus = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const tutorEmail = req.user?.email?.toLowerCase();
     const { status } = req.body as { status?: string };
+    const tutorEmail = req.user?.email?.toLowerCase();
 
     if (!ObjectId.isValid(id)) {
       res.status(400).json({
@@ -222,7 +213,7 @@ export const updateApplicationStatusByTutor = async (
     if (!status || !["approved", "rejected"].includes(status)) {
       res.status(400).json({
         success: false,
-        message: "Status must be either approved or rejected",
+        message: "Status must be approved or rejected",
       });
       return;
     }
@@ -239,7 +230,10 @@ export const updateApplicationStatusByTutor = async (
       return;
     }
 
-    if (application.tutorEmail?.toLowerCase() !== tutorEmail) {
+    if (
+      req.user?.role !== "admin" &&
+      application.tutorEmail?.toLowerCase() !== tutorEmail
+    ) {
       res.status(403).json({
         success: false,
         message:
@@ -250,7 +244,7 @@ export const updateApplicationStatusByTutor = async (
 
     await collections.applications.updateOne(
       { _id: application._id },
-      { $set: { status } },
+      { $set: { status, updatedAt: new Date().toISOString() } },
     );
 
     res.status(200).json({
@@ -263,6 +257,68 @@ export const updateApplicationStatusByTutor = async (
     res.status(500).json({
       success: false,
       message: "Failed to update application status",
+    });
+  }
+};
+
+export const deleteApplication = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const studentEmail = req.user?.email?.toLowerCase();
+
+    if (!ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid application ID",
+      });
+      return;
+    }
+
+    const application = await collections.applications.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!application) {
+      res.status(404).json({
+        success: false,
+        message: "Application not found",
+      });
+      return;
+    }
+
+    if (
+      req.user?.role !== "admin" &&
+      application.studentEmail?.toLowerCase() !== studentEmail
+    ) {
+      res.status(403).json({
+        success: false,
+        message: "Forbidden: You can only cancel your own application",
+      });
+      return;
+    }
+
+    if (req.user?.role !== "admin" && application.status !== "pending") {
+      res.status(400).json({
+        success: false,
+        message: "Only pending applications can be cancelled",
+      });
+      return;
+    }
+
+    await collections.applications.deleteOne({ _id: application._id });
+
+    res.status(200).json({
+      success: true,
+      message: "Application cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Delete application error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel application",
     });
   }
 };

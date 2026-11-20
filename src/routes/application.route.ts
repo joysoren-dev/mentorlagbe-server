@@ -1,9 +1,10 @@
 import { Router } from "express";
 import {
-  applyForTuition,
-  getStudentMyApplications,
-  getTutorReceivedApplications,
-  updateApplicationStatusByTutor,
+  createApplication,
+  getMyApplications,
+  getTutorApplications,
+  updateApplicationStatus,
+  deleteApplication,
 } from "../controllers/application.controller";
 import {
   verifyToken,
@@ -13,22 +14,11 @@ import {
 
 const router = Router();
 
-// Student routes
-router.post("/", verifyToken, verifyStudent, applyForTuition);
-router.get(
-  "/my-applications",
-  verifyToken,
-  verifyStudent,
-  getStudentMyApplications,
-);
+router.post("/", verifyToken, verifyStudent, createApplication);
+router.get("/my-applications", verifyToken, verifyStudent, getMyApplications);
+router.delete("/:id", verifyToken, verifyStudent, deleteApplication);
 
-// Tutor routes
-router.get("/tutor", verifyToken, verifyTutor, getTutorReceivedApplications);
-router.patch(
-  "/:id/status",
-  verifyToken,
-  verifyTutor,
-  updateApplicationStatusByTutor,
-);
+router.get("/tutor", verifyToken, verifyTutor, getTutorApplications);
+router.patch("/:id/status", verifyToken, verifyTutor, updateApplicationStatus);
 
 export default router;
