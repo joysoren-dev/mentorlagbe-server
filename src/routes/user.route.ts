@@ -1,19 +1,19 @@
 import { Router } from "express";
 import {
   getCurrentUserProfile,
-  updateProfile,
+  updateCurrentUserProfile,
   getAllUsersForAdmin,
   updateUserRoleByAdmin,
+  upgradeToPro,
 } from "../controllers/user.controller";
 import { verifyToken, verifyAdmin } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// Logged-in user profile routes (Student, Tutor, Admin)
-router.get("/profile", verifyToken, getCurrentUserProfile);
-router.patch("/profile", verifyToken, updateProfile);
+router.get("/me", verifyToken, getCurrentUserProfile);
+router.patch("/me", verifyToken, updateCurrentUserProfile);
+router.post("/upgrade-pro", verifyToken, upgradeToPro);
 
-// Admin user management routes
 router.get("/", verifyToken, verifyAdmin, getAllUsersForAdmin);
 router.patch("/:id/role", verifyToken, verifyAdmin, updateUserRoleByAdmin);
 

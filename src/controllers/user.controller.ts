@@ -1,9 +1,7 @@
 import { Response } from "express";
 import { ObjectId } from "mongodb";
 import { collections } from "../config/db";
-import { AuthRequest, UserRole } from "../middlewares/auth.middleware";
-
-const ALLOWED_ROLES: UserRole[] = ["student", "tutor", "admin"];
+import { AuthRequest } from "../middlewares/auth.middleware";
 
 export const getCurrentUserProfile = async (
   req: AuthRequest,
@@ -34,18 +32,18 @@ export const getCurrentUserProfile = async (
       success: true,
       user: {
         id: user._id.toString(),
-        name: user.name || "",
+        name: user.name,
         email: user.email,
-        image: user.image || "",
-        role: user.role || "student",
-        phone: user.phone || "",
-        bio: user.bio || "",
+        role: user.role,
         plan: user.plan || "free",
-        createdAt: user.createdAt || null,
+        bio: user.bio || "",
+        image: user.image || "",
+        phone: user.phone || "",
+        createdAt: user.createdAt,
       },
     });
   } catch (error) {
-    console.error("Get profile error:", error);
+    console.error("Get current user profile error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch user profile",
@@ -53,7 +51,7 @@ export const getCurrentUserProfile = async (
   }
 };
 
-export const updateProfile = async (
+export const updateCurrentUserProfile = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
@@ -68,86 +66,70 @@ export const updateProfile = async (
       return;
     }
 
-    const { name, phone, bio, image } = req.body as {
+    const { name, bio, image, phone } = req.body as {
       name?: string;
-      phone?: string;
       bio?: string;
       image?: string;
+      phone?: string;
     };
 
-    const updateFields: Record<string, string> = {};
+    const updateFields: Record<string, unknown> = {};
 
-    if (typeof name === "string") {
-      const trimmedName = name.trim();
-      if (!trimmedName) {
-        res.status(400).json({
-          success: false,
-          message: "Name cannot be empty",
-        });
-        return;
-      }
-      updateFields.name = trimmedName;
+    if (typeof name === "string" && name.trim()) {
+      updateFields.name = name.trim();
     }
-
-    if (typeof phone === "string") {
-      updateFields.phone = phone.trim();
-    }
-
     if (typeof bio === "string") {
       updateFields.bio = bio.trim();
     }
-
     if (typeof image === "string") {
       updateFields.image = image.trim();
+    }
+    if (typeof phone === "string") {
+      updateFields.phone = phone.trim();
     }
 
     if (Object.keys(updateFields).length === 0) {
       res.status(400).json({
         success: false,
-        message: "No valid profile fields provided to update",
+        message: "No valid profile fields provided for update",
       });
       return;
     }
 
-    const existingUser = await collections.users.findOne({ email });
-
-    if (!existingUser) {
-      res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-      return;
-    }
-
-    await collections.users.updateOne(
-      { _id: existingUser._id },
+    const result = await collections.users.findOneAndUpdate(
+      { email },
       { $set: updateFields },
+      { returnDocument: "after" },
     );
 
-    const updatedUser = await collections.users.findOne({
-      _id: existingUser._id,
-    });
+    if (!result) {
+      res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+      return;
+    }
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
       user: {
-        id: updatedUser?._id.toString(),
-        name: updatedUser?.name || "",
-        email: updatedUser?.email,
-        image: updatedUser?.image || "",
-        role: updatedUser?.role || "student",
-        phone: updatedUser?.phone || "",
-        bio: updatedUser?.bio || "",
-        plan: updatedUser?.plan || "free",
-        createdAt: updatedUser?.createdAt || null,
+        id: result._id.toString(),
+        name: result.name,
+        email: result.email,
+        role: result.role,
+        plan: result.plan || "free",
+        bio: result.bio || "",
+        image: result.image || "",
+        phone: result.phone || "",
+        createdAt: result.createdAt,
       },
     });
   } catch (error) {
-    console.error("Update profile error:", error);
+    console.error("Update user profile error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update profile",
+      message: "Failed to update user profile",
     });
   }
 };
@@ -165,7 +147,7 @@ export const getAllUsersForAdmin = async (
     const filter: Record<string, unknown> = {};
 
     if (role && role !== "all") {
-      if (!ALLOWED_ROLES.includes(role as UserRole)) {
+      if (!["student", "tutor", "admin"].includes(role)) {
         res.status(400).json({
           success: false,
           message: "Invalid role filter",
@@ -177,7 +159,7 @@ export const getAllUsersForAdmin = async (
 
     if (search && search.trim()) {
       const regex = new RegExp(search.trim(), "i");
-      filter.$or = [{ name: regex }, { email: regex }, { phone: regex }];
+      filter.$or = [{ name: regex }, { email: regex }];
     }
 
     const users = await collections.users
@@ -185,22 +167,19 @@ export const getAllUsersForAdmin = async (
       .sort({ createdAt: -1 })
       .toArray();
 
-    const formattedUsers = users.map((user) => ({
+    const formatted = users.map((user) => ({
       id: user._id.toString(),
-      name: user.name || "",
+      name: user.name,
       email: user.email,
-      image: user.image || "",
-      role: user.role || "student",
-      phone: user.phone || "",
-      bio: user.bio || "",
+      role: user.role,
       plan: user.plan || "free",
-      createdAt: user.createdAt || null,
+      createdAt: user.createdAt,
     }));
 
     res.status(200).json({
       success: true,
-      count: formattedUsers.length,
-      users: formattedUsers,
+      count: formatted.length,
+      users: formatted,
     });
   } catch (error) {
     console.error("Get all users error:", error);
@@ -227,66 +206,94 @@ export const updateUserRoleByAdmin = async (
       return;
     }
 
-    if (!role || !ALLOWED_ROLES.includes(role as UserRole)) {
+    if (!role || !["student", "tutor", "admin"].includes(role)) {
       res.status(400).json({
         success: false,
-        message: "Role must be one of: student, tutor, admin",
+        message: "Role must be student, tutor, or admin",
       });
       return;
     }
 
-    const targetUser = await collections.users.findOne({
+    const existing = await collections.users.findOne({
       _id: new ObjectId(id),
     });
 
-    if (!targetUser) {
+    if (!existing) {
       res.status(404).json({
         success: false,
-        message: "Target user not found",
-      });
-      return;
-    }
-
-    if (
-      req.user?.email?.toLowerCase() === targetUser.email?.toLowerCase() &&
-      role !== "admin"
-    ) {
-      res.status(400).json({
-        success: false,
-        message: "Admin cannot remove their own admin role",
+        message: "User not found",
       });
       return;
     }
 
     await collections.users.updateOne(
-      { _id: targetUser._id },
-      { $set: { role: role as UserRole } },
+      { _id: existing._id },
+      { $set: { role } },
     );
-
-    const updatedUser = await collections.users.findOne({
-      _id: targetUser._id,
-    });
 
     res.status(200).json({
       success: true,
       message: `User role updated to ${role}`,
-      user: {
-        id: updatedUser?._id.toString(),
-        name: updatedUser?.name || "",
-        email: updatedUser?.email,
-        image: updatedUser?.image || "",
-        role: updatedUser?.role || "student",
-        phone: updatedUser?.phone || "",
-        bio: updatedUser?.bio || "",
-        plan: updatedUser?.plan || "free",
-        createdAt: updatedUser?.createdAt || null,
-      },
+      role,
     });
   } catch (error) {
     console.error("Update user role error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update user role",
+    });
+  }
+};
+
+export const upgradeToPro = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const email = req.user?.email?.toLowerCase();
+
+    if (!email) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized: User email missing",
+      });
+      return;
+    }
+
+    const user = await collections.users.findOne({ email });
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    if (user.plan === "pro") {
+      res.status(200).json({
+        success: true,
+        message: "You are already on the Pro plan",
+        plan: "pro",
+      });
+      return;
+    }
+
+    await collections.users.updateOne(
+      { _id: user._id },
+      { $set: { plan: "pro", upgradedAt: new Date().toISOString() } },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Successfully upgraded to Pro plan",
+      plan: "pro",
+    });
+  } catch (error) {
+    console.error("Upgrade to pro error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upgrade to Pro plan",
     });
   }
 };
