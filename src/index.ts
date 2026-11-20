@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.route";
 import userRoutes from "./routes/user.route";
 import tuitionRoutes from "./routes/tuition.route";
 import applicationRoutes from "./routes/application.route";
+import dashboardRoutes from "./routes/dashboard.route";
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/tuitions", tuitionRoutes);
 app.use("/api/applications", applicationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 const startServer = async () => {
   await connectDB();
