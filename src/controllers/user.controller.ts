@@ -3,6 +3,9 @@ import { ObjectId } from "mongodb";
 import { collections } from "../config/db";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
+const getParamId = (rawId: string | string[] | undefined): string =>
+  Array.isArray(rawId) ? rawId[0] : rawId || "";
+
 export const getCurrentUserProfile = async (
   req: AuthRequest,
   res: Response,
@@ -195,7 +198,7 @@ export const updateUserRoleByAdmin = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const { role } = req.body as { role?: string };
 
     if (!ObjectId.isValid(id)) {

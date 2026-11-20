@@ -36,3 +36,10 @@ export const connectDB = async (): Promise<Db> => {
   console.log(`Connected to MongoDB database: ${dbName}`);
   return db;
 };
+
+export const getDB = (): Db => {
+  if (!db) {
+    throw new Error("Database not initialized. Call connectDB() first.");
+  }
+  return db;
+};

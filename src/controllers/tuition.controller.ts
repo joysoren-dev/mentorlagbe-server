@@ -5,6 +5,9 @@ import { AuthRequest } from "../middlewares/auth.middleware";
 
 const ALLOWED_MODES = ["Online", "Offline"] as const;
 
+const getParamId = (rawId: string | string[] | undefined): string =>
+  Array.isArray(rawId) ? rawId[0] : rawId || "";
+
 export const createTuition = async (
   req: AuthRequest,
   res: Response,
@@ -248,7 +251,7 @@ export const getSingleTuition = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
 
     if (!ObjectId.isValid(id)) {
       res.status(400).json({
@@ -363,7 +366,7 @@ export const updateTuitionByTutor = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const tutorEmail = req.user?.email?.toLowerCase();
 
     if (!ObjectId.isValid(id)) {
@@ -497,7 +500,7 @@ export const toggleTuitionActiveStatus = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const tutorEmail = req.user?.email?.toLowerCase();
 
     if (!ObjectId.isValid(id)) {
@@ -554,7 +557,7 @@ export const deleteTuitionByTutor = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const tutorEmail = req.user?.email?.toLowerCase();
 
     if (!ObjectId.isValid(id)) {
@@ -675,7 +678,7 @@ export const updateTuitionApprovalByAdmin = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const { approvalStatus } = req.body as { approvalStatus?: string };
 
     if (!ObjectId.isValid(id)) {

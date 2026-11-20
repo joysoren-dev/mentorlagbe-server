@@ -3,6 +3,9 @@ import { ObjectId } from "mongodb";
 import { collections } from "../config/db";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
+const getParamId = (rawId: string | string[] | undefined): string =>
+  Array.isArray(rawId) ? rawId[0] : rawId || "";
+
 export const createApplication = async (
   req: AuthRequest,
   res: Response,
@@ -198,7 +201,7 @@ export const updateApplicationStatus = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const { status } = req.body as { status?: string };
     const tutorEmail = req.user?.email?.toLowerCase();
 
@@ -266,7 +269,7 @@ export const deleteApplication = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParamId(req.params.id);
     const studentEmail = req.user?.email?.toLowerCase();
 
     if (!ObjectId.isValid(id)) {
