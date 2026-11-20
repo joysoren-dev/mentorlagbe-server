@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
+import healthRoutes from "./routes/health.route";
 
 dotenv.config();
 
@@ -22,6 +23,8 @@ app.get("/", (_req: Request, res: Response) => {
     message: "MentorLagbe Server is running!",
   });
 });
+
+app.use("/api", healthRoutes);
 
 const startServer = async () => {
   await connectDB();
