@@ -599,3 +599,131 @@ export const deleteTuitionByTutor = async (
     });
   }
 };
+
+export const getAllTuitionsForAdmin = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { status, search } = req.query as {
+      status?: string;
+      search?: string;
+    };
+
+    const filter: Record<string, unknown> = {};
+
+    if (status && status !== "all") {
+      if (!["pending", "approved", "rejected"].includes(status)) {
+        res.status(400).json({
+          success: false,
+          message: "Status must be pending, approved, or rejected",
+        });
+        return;
+      }
+      filter.approvalStatus = status;
+    }
+
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), "i");
+      filter.$or = [
+        { title: regex },
+        { subject: regex },
+        { tutorName: regex },
+        { tutorEmail: regex },
+      ];
+    }
+
+    const tuitions = await collections.tuitions
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const formatted = tuitions.map((item) => ({
+      id: item._id.toString(),
+      title: item.title,
+      subject: item.subject,
+      classLevel: item.classLevel,
+      mode: item.mode,
+      location: item.location,
+      monthlyFee: item.monthlyFee,
+      daysPerWeek: item.daysPerWeek,
+      bannerImage: item.bannerImage || "",
+      description: item.description,
+      tutorName: item.tutorName,
+      tutorEmail: item.tutorEmail,
+      approvalStatus: item.approvalStatus,
+      isActive: item.isActive,
+      createdAt: item.createdAt,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formatted.length,
+      tuitions: formatted,
+    });
+  } catch (error) {
+    console.error("Get all tuitions for admin error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch tuitions for moderation",
+    });
+  }
+};
+
+export const updateTuitionApprovalByAdmin = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { approvalStatus } = req.body as { approvalStatus?: string };
+
+    if (!ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid tuition ID",
+      });
+      return;
+    }
+
+    if (
+      !approvalStatus ||
+      !["pending", "approved", "rejected"].includes(approvalStatus)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "approvalStatus must be one of: pending, approved, rejected",
+      });
+      return;
+    }
+
+    const existing = await collections.tuitions.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!existing) {
+      res.status(404).json({
+        success: false,
+        message: "Tuition not found",
+      });
+      return;
+    }
+
+    await collections.tuitions.updateOne(
+      { _id: existing._id },
+      { $set: { approvalStatus } },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Tuition approval status updated to ${approvalStatus}`,
+      approvalStatus,
+    });
+  } catch (error) {
+    console.error("Update tuition approval error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update tuition approval status",
+    });
+  }
+};

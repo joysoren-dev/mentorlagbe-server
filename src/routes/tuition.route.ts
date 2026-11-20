@@ -7,13 +7,28 @@ import {
   updateTuitionByTutor,
   toggleTuitionActiveStatus,
   deleteTuitionByTutor,
+  getAllTuitionsForAdmin,
+  updateTuitionApprovalByAdmin,
 } from "../controllers/tuition.controller";
-import { verifyToken, verifyTutor } from "../middlewares/auth.middleware";
+import {
+  verifyToken,
+  verifyTutor,
+  verifyAdmin,
+} from "../middlewares/auth.middleware";
 
 const router = Router();
 
 // Public routes
 router.get("/", getPublicTuitions);
+
+// Admin moderation routes (keep before /:id)
+router.get("/admin/all", verifyToken, verifyAdmin, getAllTuitionsForAdmin);
+router.patch(
+  "/admin/:id/approval",
+  verifyToken,
+  verifyAdmin,
+  updateTuitionApprovalByAdmin,
+);
 
 // Tutor protected routes (keep /my-tuitions before /:id)
 router.get("/my-tuitions", verifyToken, verifyTutor, getTutorMyTuitions);
