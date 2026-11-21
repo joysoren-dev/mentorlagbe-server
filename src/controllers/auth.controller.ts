@@ -273,3 +273,139 @@ export const syncAndIssueToken = async (
     });
   }
 };
+export const googleAuthRedirect = (req: Request, res: Response): void => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const serverBase =
+    process.env.SERVER_URL || `${req.protocol}://${req.get("host")}`;
+  const redirectUri = `${serverBase}/api/auth/google/callback`;
+
+  if (!clientId) {
+    res.status(500).json({
+      success: false,
+      message: "GOOGLE_CLIENT_ID is missing in server .env",
+    });
+    return;
+  }
+
+  const requestedRole =
+    req.query.role === "tutor" || req.query.role === "student"
+      ? req.query.role
+      : "student";
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    access_type: "offline",
+    prompt: "select_account",
+    state: requestedRole,
+  });
+
+  res.redirect(
+    `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+  );
+};
+
+export const googleAuthCallback = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+
+  try {
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const stateRole =
+      req.query.state === "tutor" || req.query.state === "student"
+        ? req.query.state
+        : "student";
+
+    if (!code) {
+      res.redirect(`${clientUrl}/sign-in?error=google_auth_cancelled`);
+      return;
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+    const serverBase =
+      process.env.SERVER_URL || `${req.protocol}://${req.get("host")}`;
+    const redirectUri = `${serverBase}/api/auth/google/callback`;
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+
+    const tokenJson = (await tokenRes.json()) as { access_token?: string };
+    if (!tokenJson.access_token) {
+      res.redirect(`${clientUrl}/sign-in?error=google_token_failed`);
+      return;
+    }
+
+    const profileRes = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+      },
+    );
+
+    const profile = (await profileRes.json()) as {
+      email?: string;
+      name?: string;
+      picture?: string;
+    };
+
+    if (!profile.email) {
+      res.redirect(`${clientUrl}/sign-in?error=google_email_missing`);
+      return;
+    }
+
+    const normalizedEmail = profile.email.trim().toLowerCase();
+    const existingUser = await collections.users.findOne({
+      email: normalizedEmail,
+    });
+
+    let userDoc = existingUser;
+    if (!existingUser) {
+      const newUser = {
+        name: profile.name?.trim() || normalizedEmail.split("@")[0],
+        email: normalizedEmail,
+        image: profile.picture || "",
+        role: stateRole,
+        phone: "",
+        bio: "",
+        plan: "free" as const,
+        createdAt: new Date().toISOString(),
+      };
+      const insertResult = await collections.users.insertOne(newUser);
+      userDoc = { _id: insertResult.insertedId, ...newUser };
+    } else if (profile.picture && !existingUser.image) {
+      await collections.users.updateOne(
+        { _id: existingUser._id },
+        { $set: { image: profile.picture } },
+      );
+      userDoc = { ...existingUser, image: profile.picture };
+    }
+
+    const authData = buildAuthResponse(userDoc || {}, normalizedEmail);
+    const payload = encodeURIComponent(
+      JSON.stringify({
+        success: true,
+        message: "Signed in with Google",
+        ...authData,
+      }),
+    );
+
+    res.redirect(`${clientUrl}/auth/callback?data=${payload}`);
+  } catch (error) {
+    console.error("Google OAuth callback error:", error);
+    res.redirect(`${clientUrl}/sign-in?error=google_server_error`);
+  }
+};
